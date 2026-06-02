@@ -258,5 +258,3 @@ No separate `data/` folder is present or required; all data are accessed at runt
 **Student ID:** 138722027
 **Major:** Management Information Systems (MIS), Marmara University
 **Course:** Quantitative Analysis for Decision Making
-#   t u i k - f o r e c a s t i n g - p r o j e c t  
- 
