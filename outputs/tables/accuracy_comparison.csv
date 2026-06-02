@@ -1,0 +1,11 @@
+"Method","Bias_ME","MAD","MSE","MAPE_pct","RSFE","Tracking_Signal","Next_Period_Fcst"
+"Naive Forecasting",1.2726,16.8683,648.7239,17.9055,170.53,10.1095,194.91
+"Moving Average (k=3)",1.2696,13.6314,299.3639,14.4157,168.8533,12.3871,181.15
+"Weighted Moving Average",2.0049,18.1561,578.3,18.7544,264.646,14.5761,184.67
+"Exponential Smoothing",4.923,17.9589,512.6681,18.7037,664.6034,37.0069,193.75
+"Trend-Adjusted Exp. Smoothing (Holt)",1.1592,16.5955,459.2896,17.0308,156.4939,9.4299,199.27
+"Linear Trend Projection",0,15.6699,418.5633,16.8438,0,0,198.6
+"Seasonal Indices",-0.6549,7.4903,118.9701,7.2218,-88.4163,-11.8041,189.47
+"Additive Decomposition",-0.0606,2.3293,8.3528,2.3437,-7.4522,-3.1994,190.28
+"Multiplicative Decomposition",0.0454,6.0125,72.9135,5.6001,5.59,0.9297,184.4
+"Regression (Trend + Seasonal Dummies)",0,3.363,17.8304,3.2668,0,0,190.83

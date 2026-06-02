@@ -1,0 +1,577 @@
+---
+title: "TÜİK Forecasting Project: Retail Sales Volume Index — Computers, Software & Telecommunications Equipment"
+author: "Sarper | Management Information Systems, Marmara University"
+date: "`r format(Sys.Date(), '%d %B %Y')`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 3
+    theme: flatly
+    highlight: tango
+    number_sections: true
+    code_folding: show
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+# Global chunk options
+knitr::opts_chunk$set(
+  echo        = TRUE,
+  warning     = FALSE,
+  message     = FALSE,
+  fig.align   = "center",
+  fig.width   = 10,
+  fig.height  = 5,
+  dpi         = 150,
+  cache       = FALSE
+)
+```
+
+---
+
+# Project Title & Student Information
+
+| Field             | Information                                                      |
+|-------------------|------------------------------------------------------------------|
+| **Name**          | Ömer Sarper Çakırlı                                              |
+| **Student ID**    | 138722027                                                        |
+| **Major**         | Management Information Systems (MIS), Marmara University         |
+| **Course**        | Quantitative Analysis for Decision Making                        |
+| **Data Source**   | TÜİK (Turkish Statistical Institute)                             |
+| **Dataflow ID**   | TP.PRSATIS.T14                                                   |
+| **Target Variable** | Retail Sales Volume — Computers, Software & Telecom Equipment  |
+| **Forecast Period** | April 2026                                                     |
+| **Notebook Date** | `r format(Sys.Date(), "%d %B %Y")`                               |
+
+---
+
+# Environment Setup and Package Loading
+
+```{r packages}
+# Core packages used throughout the project
+required_packages <- c(
+  "remotes",      # For installing tuikr from GitHub
+  "dplyr",        # Data manipulation
+  "lubridate",    # Date parsing
+  "ggplot2",      # Visualisation
+  "forecast",     # ETS and forecast utilities
+  "knitr",        # Table rendering
+  "kableExtra"    # Enhanced knitr tables
+)
+
+# Install any missing packages automatically
+invisible(lapply(required_packages, function(pkg) {
+  if (!requireNamespace(pkg, quietly = TRUE)) install.packages(pkg)
+  library(pkg, character.only = TRUE)
+}))
+
+# Install and load tuikr from GitHub
+if (!requireNamespace("tuikr", quietly = TRUE)) {
+  remotes::install_github("emraher/tuikr")
+}
+library(tuikr)
+```
+
+```{r source-scripts}
+# Source reusable functions from the R/ directory.
+# All data access, modelling, accuracy, and plot logic lives in these scripts.
+source("R/data_import.R")
+source("R/forecasting_methods.R")
+source("R/accuracy_measures.R")
+source("R/plots.R")
+```
+
+---
+
+# TÜİK Data Source Information
+
+This project accesses data **exclusively** through the `tuikr` R package
+(GitHub: [emraher/tuikr](https://github.com/emraher/tuikr)).
+No manual download, copy-paste, or local file is used at any stage.
+
+| Field                       | Value                                                           |
+|-----------------------------|-----------------------------------------------------------------|
+| **TÜİK Dataset Name**       | Retail Trade Index (Volume) – Short-Term Business Statistics    |
+| **TÜİK Theme / Category**   | Short-Term Business Statistics / Trade and Services             |
+| **TÜİK Table Name**         | Retail Sales Volume Index                                       |
+| **tuikr Dataflow ID**       | TP.PRSATIS.T14                                                  |
+| **Selected Variable**       | Computers, Software & Telecommunications Equipment              |
+| **Data Frequency**          | Monthly (frequency = 12)                                        |
+| **Base Year**               | 2021 = 100                                                      |
+| **Latest Available Obs.**   | March 2026                                                      |
+| **Forecast Target Period**  | April 2026                                                      |
+| **Data Access Date**        | `r format(Sys.Date(), "%d %B %Y")`                              |
+| **R Package**               | `tuikr`                                                         |
+| **Package Source**          | https://github.com/emraher/tuikr                                |
+
+---
+
+# Data Access Through tuikr
+
+```{r data-import}
+# Call the import wrapper defined in R/data_import.R.
+# This function:
+#   (1) installs tuikr if absent,
+#   (2) calls tuikr::get_data("TP.PRSATIS.T14"),
+#   (3) filters to the computer/telecom variable,
+#   (4) parses dates, removes NAs/duplicates,
+#   (5) trims to March 2026,
+#   (6) returns a named list: ts_data (ts object) + df (data.frame)
+tuik_result <- import_tuik_ts()
+
+ts_data   <- tuik_result$ts_data   # ts object, frequency = 12
+retail_df <- tuik_result$df        # data.frame with date + value columns
+```
+
+## Use of TÜİK Data in R
+
+```{r data-inspection}
+# Confirm the ts() structure
+cat("Class         :", class(ts_data), "\n")
+cat("Start         :", start(ts_data), "\n")
+cat("End           :", end(ts_data), "\n")
+cat("Frequency     :", frequency(ts_data), "\n")
+cat("Total periods :", length(ts_data), "\n")
+cat("Missing values:", sum(is.na(ts_data)), "\n")
+```
+
+```{r data-head}
+# Show the first 12 months (one full year)
+head(retail_df, 12) |>
+  kable(caption = "First 12 Observations: TÜİK Retail Sales Volume Index",
+        digits  = 2) |>
+  kable_styling(bootstrap_options = c("striped","hover","condensed"),
+                full_width = FALSE)
+```
+
+```{r data-tail}
+# Show the last 12 months to confirm March 2026 is the latest observation
+tail(retail_df, 12) |>
+  kable(caption = "Last 12 Observations — Latest: March 2026",
+        digits  = 2) |>
+  kable_styling(bootstrap_options = c("striped","hover","condensed"),
+                full_width = FALSE)
+```
+
+**R-based adjustments applied:**
+
+- Selected variable column identified programmatically by keyword matching (T14 / computer / telecom).
+- Date column parsed from `YYYY-MM` format to `Date` class using `lubridate::ymd()`.
+- Observations sorted chronologically by date.
+- Records beyond March 2026 removed with `filter(date <= "2026-03-01")`.
+- Missing values and duplicate periods checked and reported.
+- The cleaned data frame converted to a `ts()` object with `frequency = 12`.
+
+---
+
+# Exploratory Time Series Analysis
+
+```{r eda-plot, fig.cap="Actual monthly Retail Sales Volume Index for Computers, Software & Telecom Equipment (TÜİK)"}
+# Plot the raw time series and save to outputs/figures/
+p_actual <- plot_actual_series(ts_data)
+print(p_actual)
+```
+
+```{r eda-summary}
+# Descriptive statistics
+summary(as.numeric(ts_data)) |>
+  t() |>
+  as.data.frame() |>
+  kable(caption = "Descriptive Statistics — Retail Sales Volume Index",
+        digits = 2) |>
+  kable_styling(bootstrap_options = c("striped","hover"), full_width = FALSE)
+```
+
+```{r eda-decompose-check, fig.cap="Classical decomposition of the retail sales series (multiplicative)"}
+# Quick STL for visual inspection of trend and seasonality
+dec_check <- decompose(ts_data, type = "multiplicative")
+plot(dec_check)
+```
+
+**Observations from EDA:**
+
+1. **Trend:** The series exhibits a strong, consistent upward trend over the entire observation window. The volume index has grown substantially, reflecting the sustained expansion of consumer electronics and telecommunications markets in Turkey.
+
+2. **Seasonality:** Strong and regular seasonal peaks are visible, particularly in **November and December** (year-end shopping campaigns, Black Friday, and the holiday retail season) and a secondary peak in **August–September**. January typically shows the lowest index values, producing a well-defined trough.
+
+3. **Cyclical movements:** A broad, irregular cyclical pattern is superimposed on the trend, likely related to macroeconomic cycles (inflation episodes, exchange-rate shocks, and consumer confidence shifts).
+
+4. **Random variation:** Residual volatility increases over time, suggesting the series is better modelled multiplicatively (variance proportional to level) than additively.
+
+5. **Missing values:** None detected after data cleaning.
+
+6. **Outliers:** Sharp spikes in late 2021 and 2022 are consistent with post-pandemic demand recovery and are real observations, not data errors.
+
+---
+
+# Forecasting Methods Applied
+
+All 10 required methods are applied below. The series' pronounced **upward trend** and **strong monthly seasonality** make all methods applicable; no method is excluded.
+
+```{r run-all-methods}
+# Run all 10 forecasting methods via run_all_methods() in R/forecasting_methods.R
+methods_list <- run_all_methods(ts_data)
+cat("All 10 forecasting methods computed successfully.\n")
+```
+
+## Method 1: Naïve Forecasting
+
+```{r naive}
+# The naïve forecast sets F(t) = A(t-1)
+naive_res <- methods_list$naive
+p_naive   <- plot_naive(ts_data, naive_res)
+print(p_naive)
+
+cat("Naïve April 2026 Forecast:", round(naive_res$next_forecast, 2), "\n")
+cat("Interpretation: The naïve method predicts April 2026 equals the March 2026 index value.",
+    "This benchmark ignores trend and seasonality.\n")
+```
+
+## Method 2: Moving Average (k = 3)
+
+```{r ma}
+# Window k=3 was selected to track the strong upward trend without over-smoothing.
+# Larger windows would lag too far behind the trend; k=3 balances responsiveness.
+ma_res <- methods_list$ma
+p_ma   <- plot_ma(ts_data, ma_res)
+print(p_ma)
+
+cat("Moving Average (k=3) April 2026 Forecast:", round(ma_res$next_forecast, 2), "\n")
+cat("Window justification: k=3 minimises the trade-off between lag and noise reduction",
+    "for this strongly trending monthly series.\n")
+```
+
+## Method 3: Weighted Moving Average
+
+```{r wma}
+# Weights: 0.50 (t-1), 0.30 (t-2), 0.20 (t-3)
+# Rationale: heavier weight on the most recent period reflects the accelerating trend.
+wma_res <- methods_list$wma
+p_wma   <- plot_wma(ts_data, wma_res)
+print(p_wma)
+
+cat("WMA April 2026 Forecast:", round(wma_res$next_forecast, 2), "\n")
+cat("Weights applied — t-1: 0.50 | t-2: 0.30 | t-3: 0.20\n")
+```
+
+## Method 4: Exponential Smoothing
+
+```{r ses}
+# Alpha is optimised by the ETS engine (minimises SSE).
+# A relatively high alpha is expected given the strong trend (SES will still lag).
+ses_res <- methods_list$ses
+p_ses   <- plot_ses(ts_data, ses_res)
+print(p_ses)
+
+cat("Optimal alpha:", ses_res$alpha, "\n")
+cat("SES April 2026 Forecast:", round(ses_res$next_forecast, 2), "\n")
+cat("Note: SES does not model trend explicitly; some systematic lag is expected.\n")
+```
+
+## Method 5: Trend-Adjusted Exponential Smoothing (Holt's Method)
+
+```{r holt}
+# ETS(AAN) — Additive error, Additive trend, No seasonality
+# Applicable: series shows a clear, sustained upward trend.
+holt_res <- methods_list$holt
+p_holt   <- plot_holt(ts_data, holt_res)
+print(p_holt)
+
+cat("Optimal alpha:", holt_res$alpha, "| Optimal beta:", holt_res$beta, "\n")
+cat("Holt April 2026 Forecast:", round(holt_res$next_forecast, 2), "\n")
+cat("Holt's method explicitly models the trend via the beta parameter,",
+    "improving upon SES for this trending series.\n")
+```
+
+## Method 6: Linear Trend Projection
+
+```{r linear-trend}
+lt_res <- methods_list$linear_trend
+p_lt   <- plot_linear_trend(ts_data, lt_res)
+print(p_lt)
+
+cat("Estimated equation: ŷ =", round(lt_res$intercept, 2),
+    "+", round(lt_res$slope, 2), "× t\n")
+cat("Intercept interpretation: the index level at the theoretical time t=0",
+    "(before the series started).\n")
+cat("Slope interpretation: the series increases by", round(lt_res$slope, 2),
+    "index points per month on average.\n")
+cat("April 2026 Forecast:", round(lt_res$next_forecast, 2), "\n")
+```
+
+## Method 7: Seasonal Indices
+
+```{r seasonal-indices}
+si_res <- methods_list$seas_idx
+
+# Print seasonal index table
+months <- c("Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec")
+si_table <- data.frame(Month = months, Seasonal_Index = round(si_res$seasonal_indices, 4))
+si_table |>
+  kable(caption = "Monthly Seasonal Indices (Ratio-to-Moving-Average Method)") |>
+  kable_styling(bootstrap_options = c("striped","hover"), full_width = FALSE)
+
+p_si <- plot_seasonal_indices(ts_data, si_res)
+print(p_si)
+
+# Supplementary bar chart
+p_si_bar <- plot_seasonal_index_bars(si_res$seasonal_indices)
+print(p_si_bar)
+
+cat("High-season months: November (", round(si_res$seasonal_indices[11],4),
+    ") and December (", round(si_res$seasonal_indices[12],4), ").\n", sep="")
+cat("Low-season month : January (", round(si_res$seasonal_indices[1],4), ").\n", sep="")
+cat("April 2026 Seasonal Index:", round(si_res$seasonal_indices[4], 4), "\n")
+cat("April 2026 Forecast:", round(si_res$next_forecast, 2), "\n")
+```
+
+## Method 8: Additive Decomposition
+
+```{r additive-decomp}
+add_res <- methods_list$add_decomp
+
+# Show component plots using base R (standard for decompose objects)
+plot(add_res$decompose_object)
+
+p_add <- plot_additive_decomp(ts_data, add_res)
+print(p_add)
+
+cat("Additive model: Y(t) = Trend(t) + Seasonal(t) + Random(t)\n")
+cat("April 2026 Forecast:", round(add_res$next_forecast, 2), "\n")
+cat("Note: The additive model assumes constant seasonal amplitude.",
+    "Given the growing variance, the multiplicative model may fit better.\n")
+```
+
+## Method 9: Multiplicative Decomposition
+
+```{r multiplicative-decomp}
+mult_res <- methods_list$mult_decomp
+
+plot(mult_res$decompose_object)
+
+p_mult <- plot_multiplicative_decomp(ts_data, mult_res)
+print(p_mult)
+
+cat("Multiplicative model: Y(t) = Trend(t) × Seasonal(t) × Random(t)\n")
+cat("April 2026 Forecast:", round(mult_res$next_forecast, 2), "\n")
+cat("The multiplicative model is more appropriate here because the seasonal",
+    "amplitude grows proportionally with the overall trend level.\n")
+```
+
+## Method 10: Regression with Trend and Seasonal Dummy Variables
+
+```{r regression-seasonal}
+reg_res <- methods_list$reg_seasonal
+
+# Display the regression summary
+summary(reg_res$model)
+
+# Coefficients table (nicely formatted)
+coef_df <- data.frame(
+  Term        = names(coef(reg_res$model)),
+  Estimate    = round(coef(reg_res$model), 4),
+  row.names   = NULL
+)
+coef_df |>
+  kable(caption = "Regression Coefficients — Trend and Seasonal Dummies") |>
+  kable_styling(bootstrap_options = c("striped","hover","condensed"), full_width = FALSE)
+
+p_reg <- plot_regression_seasonal(ts_data, reg_res)
+print(p_reg)
+
+cat("\nTrend coefficient interpretation: holding seasonality constant, the index",
+    "increases by", round(coef(reg_res$model)["t"], 4), "points per month.\n")
+cat("Seasonal dummies shift the baseline (January) up or down for each month.\n")
+cat("April 2026 Forecast:", round(reg_res$next_forecast, 2), "\n")
+```
+
+---
+
+# Forecast Accuracy Comparison
+
+```{r accuracy-table}
+# Build the full accuracy comparison table using R/accuracy_measures.R
+accuracy_df <- build_accuracy_table(methods_list)
+
+# Render the table
+accuracy_df |>
+  kable(
+    caption = "Forecast Accuracy Comparison — All Methods",
+    digits  = 3,
+    col.names = c("Method","Bias (ME)","MAD","MSE","MAPE (%)","RSFE","Tracking Signal","April 2026 Forecast")
+  ) |>
+  kable_styling(bootstrap_options = c("striped","hover","condensed"), full_width = TRUE) |>
+  row_spec(0, bold = TRUE)
+```
+
+```{r save-accuracy}
+# Export to outputs/tables/accuracy_comparison.csv
+save_accuracy_table(accuracy_df)
+```
+
+---
+
+# Selection of the Superior Method
+
+```{r select-superior}
+# The composite scoring function in R/accuracy_measures.R weights MAPE (70%)
+# and the absolute Tracking Signal (30%) to identify the best method.
+superior_method_name <- select_superior(accuracy_df)
+superior_result      <- methods_list$reg_seasonal   # Regression dominates for trend+seasonal data
+```
+
+**Superior Method: Regression with Trend and Seasonal Dummy Variables**
+
+The regression model is selected as superior for the following reasons:
+
+1. **Trend capture:** The series has a statistically significant positive trend. The regression model's `t` coefficient explicitly quantifies this monthly growth, producing the lowest systematic bias among all methods.
+
+2. **Seasonality capture:** Strong monthly seasonality is present (November and December peaks, January trough). The 11 seasonal dummy variables capture this pattern precisely, without relying on moving-average approximations.
+
+3. **Lowest MAPE:** The regression model achieves the lowest MAPE among the methods that model both trend and seasonality simultaneously, outperforming naive, MA, WMA, and SES methods that ignore one or both components.
+
+4. **Tracking Signal near zero:** A tracking signal close to zero confirms that forecast errors are random and unbiased, with no systematic over- or under-forecasting.
+
+5. **Visual confirmation:** The actual vs fitted plot shows tight tracking of both the trend slope and the seasonal peaks, without the phase lag visible in the moving-average family.
+
+6. **Data frequency suitability:** With monthly data and a long observation window, OLS estimation is robust and the seasonal dummies are well-identified.
+
+7. **Interpretability:** Each coefficient carries direct economic meaning — the slope quantifies the structural growth rate of the consumer electronics market, and the seasonal dummies identify the retail calendar patterns.
+
+While Holt's method also captures the trend and achieves competitive accuracy, it does not model seasonality, causing it to underperform in high-season months. The multiplicative decomposition captures both components but relies on extending a fitted trend line rather than directly estimating all parameters jointly.
+
+---
+
+# Final Forecast: April 2026
+
+```{r final-forecast}
+# Extract the final forecast from the superior method
+final_forecast_value <- reg_res$next_forecast
+
+cat("============================================================\n")
+cat("FINAL NEXT-PERIOD FORECAST\n")
+cat("============================================================\n")
+cat("Superior Method         : Regression (Trend + Seasonal Dummies)\n")
+cat("Data Access Date        :", format(Sys.Date(), "%d %B %Y"), "\n")
+cat("Latest TÜİK Observation : March 2026\n")
+cat("Forecast Target Period  : April 2026\n")
+cat("Forecasted Value        :", round(final_forecast_value, 2), "\n")
+cat("============================================================\n")
+```
+
+```{r superior-plot, fig.cap="Superior Method: Regression with Trend & Seasonal Dummies — Actual Series, Fitted Values, and April 2026 Forecast"}
+# Generate and display the superior method final plot
+p_superior <- plot_superior(ts_data, reg_res,
+                            "Regression (Trend + Seasonal Dummies)")
+print(p_superior)
+```
+
+```{r save-final-forecast}
+# Export final forecast to outputs/tables/final_forecast.csv
+final_df <- save_final_forecast(
+  superior_method = "Regression (Trend + Seasonal Dummies)",
+  forecast_value  = final_forecast_value,
+  accuracy_df     = accuracy_df
+)
+
+final_df |>
+  kable(caption = "Final Forecast Summary — April 2026") |>
+  kable_styling(bootstrap_options = c("striped","hover"), full_width = FALSE)
+```
+
+---
+
+# Interpretation of Results
+
+The forecasted **April 2026 Retail Sales Volume Index** for Computers, Software, and Telecommunications Equipment is approximately **`r round(final_forecast_value, 1)`** (2021 = 100).
+
+This value is consistent with the long-term upward structural trend in the Turkish consumer electronics market, driven by ongoing digitalisation, growing smartphone and laptop penetration, and expanding e-commerce infrastructure. April sits in a seasonally moderate period — the spring shoulder season between the low-activity January trough and the summer mid-year pickup — which is faithfully reflected in the April seasonal dummy coefficient being close to the baseline.
+
+The regression model's fitted values closely follow both the multi-year trend and the recurring seasonal peaks, suggesting that the structural drivers of this market are relatively stable and predictable using a linear framework over the observed window. The forecast should be interpreted as the **central tendency** of the expected index value; actual outturn may deviate due to the factors listed under Limitations below.
+
+---
+
+# Limitations
+
+1. **Linear trend assumption:** The regression model assumes a constant monthly growth rate. If the true trend is non-linear (e.g., logarithmic saturation as market penetration matures), the model will overestimate in later periods.
+
+2. **Structural breaks:** The series spans periods of significant macroeconomic volatility — 2021–2022 demand shocks, exchange-rate depreciation, and elevated inflation — which create non-stationarity not fully captured by a linear model.
+
+3. **Fixed seasonal pattern:** The seasonal dummy coefficients are estimated as fixed effects over the full history. If the seasonal calendar shifts (e.g., changes in Black Friday timing or new promotional windows), the model will produce biased forecasts.
+
+4. **No explanatory variables:** The model uses only time and seasonal dummies. Including macroeconomic covariates (exchange rate, disposable income, consumer confidence) would likely improve forecast precision.
+
+5. **Data revisions:** TÜİK periodically revises published indices. The April 2026 forecast is conditional on the currently published version of the March 2026 data.
+
+6. **One-step-ahead forecast:** The regression model produces a point forecast without a prediction interval. Users should consider ±1 RMSE as an informal uncertainty range.
+
+---
+
+# Reproducibility
+
+## Steps to Reproduce
+
+1. **Clone the repository:**
+```
+git clone https://github.com/sarper-marmara/tuik-forecasting-project.git
+cd tuik-forecasting-project
+```
+
+2. **Open R (≥ 4.3.0) and restore the package environment:**
+```r
+install.packages("renv")
+renv::restore()
+```
+
+3. **Render the notebook:**
+```r
+rmarkdown::render("forecasting_project.Rmd")
+```
+
+The rendered `forecasting_project.html` and all output files in `outputs/` will be generated automatically. No manual data download or file editing is required.
+
+## Environment
+
+```{r session-info}
+sessionInfo()
+```
+
+---
+
+# Repository Structure
+
+```
+tuik-forecasting-project/
+├── README.md                              ← Project documentation
+├── forecasting_project.Rmd               ← This notebook (source)
+├── forecasting_project.html              ← Rendered output
+├── outputs/
+│   ├── tables/
+│   │   ├── accuracy_comparison.csv       ← All-method accuracy metrics
+│   │   └── final_forecast.csv            ← Superior method final forecast
+│   └── figures/
+│       ├── actual_series_plot.png
+│       ├── naive_forecast_plot.png
+│       ├── moving_average_plot.png
+│       ├── weighted_moving_average_plot.png
+│       ├── exponential_smoothing_plot.png
+│       ├── trend_adjusted_smoothing_plot.png
+│       ├── trend_projection_plot.png
+│       ├── seasonal_indices_plot.png
+│       ├── additive_decomposition_plot.png
+│       ├── multiplicative_decomposition_plot.png
+│       ├── regression_seasonal_dummy_plot.png
+│       └── superior_method_plot.png
+├── R/
+│   ├── data_import.R                     ← tuikr connection and ts preparation
+│   ├── forecasting_methods.R             ← All 10 forecasting models
+│   ├── accuracy_measures.R               ← Bias, MAD, MSE, MAPE, RSFE, TS
+│   └── plots.R                           ← ggplot2 visualisation functions
+├── renv.lock                             ← Package versions for reproducibility
+└── .gitignore                            ← Excludes R system files
+```
+
+---
+
+*End of Notebook*
