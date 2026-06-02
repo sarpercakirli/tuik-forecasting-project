@@ -102,18 +102,18 @@ Accuracy was evaluated over the in-sample fitted period for each method. All mea
 
 | Method                                      | Bias (ME) | MAD    | MSE      | MAPE (%) | RSFE    | Tracking Signal | April 2026 Forecast |
 |---------------------------------------------|-----------|--------|----------|----------|---------|-----------------|---------------------|
-| Naïve Forecasting                           | —         | —      | —        | —        | —       | —               | —                   |
-| Moving Average (k=3)                        | —         | —      | —        | —        | —       | —               | —                   |
-| Weighted Moving Average                     | —         | —      | —        | —        | —       | —               | —                   |
-| Exponential Smoothing                       | —         | —      | —        | —        | —       | —               | —                   |
-| Trend-Adjusted Exp. Smoothing (Holt)        | —         | —      | —        | —        | —       | —               | —                   |
-| Linear Trend Projection                     | —         | —      | —        | —        | —       | —               | —                   |
-| Seasonal Indices                            | —         | —      | —        | —        | —       | —               | —                   |
-| Additive Decomposition                      | —         | —      | —        | —        | —       | —               | —                   |
-| Multiplicative Decomposition                | —         | —      | —        | —        | —       | —               | —                   |
-| Regression (Trend + Seasonal Dummies)       | **lowest**| lowest | lowest   | **lowest**| ≈0     | **≈0**          | —                   |
+| Naïve Forecasting                           | 1.273	    | 16.868 | 648.724	| 17.906   | 170.530 | 10.110	         | 194.91              |
+| Moving Average (k=3)                        | 1.270     |	13.631 | 299.364  |	14.416   | 168.853 | 12.387          | 181.15              |
+| Weighted Moving Average                     | 2.005     |	18.156 | 578.300  |	18.754   | 264.646 | 14.576          | 184.67              |
+| Exponential Smoothing                       | 4.923     |	17.959 | 512.668  |	18.704   | 664.603 | 37.007          | 193.75              |
+| Trend-Adjusted Exp. Smoothing (Holt)        | 1.159     |	16.596 | 459.290  |	17.031   | 156.494 | 9.430           | 199.27              |
+| Linear Trend Projection                     | 0.000     |	15.670 | 418.563  |	16.844   | 0.000   | 0.000           | 198.60              |
+| Seasonal Indices                            | -0.655    |	7.490  | 118.970  |	7.222    | -88.416 | -11.804         | 189.47              |
+| Additive Decomposition                      | -0.061    |	2.329  | 8.353    |	2.344    | -7.452  | -3.199          | 190.28              |
+| Multiplicative Decomposition                | 0.045     |	6.013  | 72.914   |	5.600    | 5.590   | 0.930           | 184.40              |
+| Regression (Trend + Seasonal Dummies)       | 0.000     |	3.363  | 17.830   |	3.267    | 0.000   | 0.000           | 190.83              |
 
-*Note: Exact numerical values are computed at runtime when the notebook is executed and are recorded in `outputs/tables/accuracy_comparison.csv`. The regression model consistently achieves the best performance across all metrics for this trend-and-seasonal series.*
+
 
 ---
 
@@ -149,7 +149,7 @@ The regression model's actual vs fitted plot shows the tightest tracking of both
 | Date of Data Access          | May 2026                                                 |
 | Latest Available TÜİK Obs.   | March 2026                                               |
 | Forecast Target Period       | **April 2026**                                           |
-| Forecasted Value             | *See `outputs/tables/final_forecast.csv` for exact value computed at runtime* |
+| Forecasted Value             | 190.83                                                   |
 
 The April 2026 forecast is consistent with the long-term upward trend and positions April within the spring shoulder season — above the January trough, below the November/December peaks — in line with the historically estimated April seasonal index.
 
